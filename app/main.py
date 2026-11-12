@@ -2,9 +2,21 @@
 
 salon_name = "Glow Beauty Salon"
 
-service_name = "Haircut"
-service_price = 50000
+services = {
+    "Haircut": 50000,
+    "Hair Coloring": 150000,
+    "Hair Wash": 30000,
+    "Hair Treatment": 100000
+}
 
-print("Welcome to", salon_name)
-print("Available service:", service_name)
-print("Service price: Rp", service_price)
+
+def display_services(service_catalog):
+    print(f"\nWelcome to {salon_name}")
+    print("\nAvailable Services:")
+
+    for service, price in service_catalog.items():
+        formatted_price = f"{price:,}".replace(",", ".")
+        print(f"- {service}: Rp {formatted_price}")
+
+
+display_services(services)
