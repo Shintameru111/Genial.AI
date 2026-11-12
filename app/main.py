@@ -33,37 +33,102 @@ def display_services(service_catalog):
     print(f"\nWelcome to {salon_name}")
     print("\nAvailable Services:")
 
-    for service, price in service_catalog.items():
+    for number, (service, price) in enumerate(service_catalog.items(), start=1):
         formatted_price = f"{price:,}".replace(",", ".")
-        print(f"- {service}: Rp {formatted_price}")
-
-
-
+        print(f"{number}. {service}: Rp {formatted_price}")
 
 
 def select_service(service_catalog):
     display_services(service_catalog)
 
-    selected_service = input(
-        "\nPlease enter the service you want: "
-    ).strip().lower()
+    service_list = list(service_catalog.items())
 
-    matching_service = next(
-        (service for service in service_catalog
-         if service.lower() == selected_service),
-        None
+    print("\nYou can select multiple services.")
+    print("Example: 1, 2, 4")
+
+    selected_input = input(
+        "\nEnter service numbers: "
+    ).strip()
+
+    try:
+        selected_numbers = [
+            int(number.strip())
+            for number in selected_input.split(",")
+        ]
+    except ValueError:
+        print("Please enter valid numbers.")
+        return None
+
+    if not selected_numbers:
+        print("Please select at least one service.")
+        return None
+
+    if len(set(selected_numbers)) != len(selected_numbers):
+        print("Duplicate selections are not allowed.")
+        return None
+
+    if any(number < 1 or number > len(service_list)
+           for number in selected_numbers):
+        print("One or more service numbers are invalid.")
+        return None
+
+    selected_services = [
+        service_list[number - 1]
+        for number in selected_numbers
+    ]
+
+    return selected_services
+
+
+
+def book_appointment(service_catalog):
+
+    print("\n===== BOOK YOUR APPOINTMENT =====")
+
+    customer_name = input("Enter your name: ").strip()
+
+    if not customer_name:
+        print("Customer name cannot be empty.")
+        return
+
+    selected_services = select_service(service_catalog)
+
+    if selected_services is None:
+        return
+
+    appointment_date = input(
+        "\nEnter appointment date (DD-MM-YYYY): "
+    ).strip()
+
+    appointment_time = input(
+        "Enter appointment time (HH:MM): "
+    ).strip()
+
+    total_price = sum(
+        price for service, price in selected_services
     )
 
-    if matching_service:
-        price = service_catalog[matching_service]
+    print("\n===== BOOKING SUMMARY =====")
+    print(f"Customer: {customer_name}")
+
+    print("\nSelected Services:")
+
+    for service, price in selected_services:
         formatted_price = f"{price:,}".replace(",", ".")
+        print(f"- {service}: Rp {formatted_price}")
 
-        print("\nYour selected service:")
-        print(f"Service: {matching_service}")
-        print(f"Price: Rp {formatted_price}")
+    formatted_total = f"{total_price:,}".replace(",", ".")
 
+    print(f"\nTotal Price: Rp {formatted_total}")
+    print(f"Date: {appointment_date}")
+    print(f"Time: {appointment_time}")
+
+    confirmation = input(
+        "\nConfirm your booking? (yes/no): "
+    ).strip().lower()
+
+    if confirmation == "yes":
+        print("\nYour booking request has been confirmed!")
     else:
-        print("\nSorry, the service is not available.")
-
-
-select_service(services)
+        print("\nBooking cancelled.")
+book_appointment(services)
