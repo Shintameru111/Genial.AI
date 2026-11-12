@@ -6,7 +6,8 @@ services = {
     "Haircut": 50000,
     "Hair Coloring": 150000,
     "Hair Wash": 30000,
-    "Hair Treatment": 100000
+    "Hair Treatment": 100000,
+    "Manicure": 75000
 }
 
 
