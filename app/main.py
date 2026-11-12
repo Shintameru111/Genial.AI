@@ -1,6 +1,15 @@
-# Genial.AI - Salon Service Catalog
+
+# ==========================================
+# GENIAL.AI - SALON BOOKING SYSTEM
+# ==========================================
+
+
+# 1. SALON INFORMATION
 
 salon_name = "Glow Beauty Salon"
+
+
+# 2. SERVICE CATALOG (SERVICE NAME AND PRICE)
 
 services = {
     "Haircut": 50000,
@@ -29,16 +38,53 @@ services = {
 }
 
 
-def display_services(service_catalog):
-    print(f"\nWelcome to {salon_name}")
-    print("\nAvailable Services:")
+# 3. SERVICE DURATION (IN MINUTES)
 
-    for number, (service, price) in enumerate(service_catalog.items(), start=1):
+service_durations = {
+    "Haircut": 30,
+    "Haircut & Styling": 60,
+    "Hair Coloring": 120,
+    "Hair Highlights": 180,
+    "Hair Wash": 20,
+    "Hair Treatment": 60,
+    "Manicure and Pedicure": 90,
+    "Facial Treatment": 60,
+    "Makeup Application": 60,
+    "Bridal Makeup": 120,
+    "Eyebrow Threading": 15,
+    "Eyelash Extensions": 120,
+    "Waxing": 30,
+    "Skincare Consultation": 30,
+    "Massage Therapy": 60,
+    "bridal package": 240,
+    "spa package": 120,
+    "hair spa": 90,
+    "nail art": 60,
+    "bridal hair styling": 90,
+    "bridal makeup trial": 90,
+    "bridal hair trial": 90,
+    "bridal package with makeup and hair": 300
+}
+
+
+# 4. DISPLAY AVAILABLE SERVICES
+
+def display_services(service_catalog):
+
+    print(f"\nWelcome to {salon_name}")
+    print("\n========== AVAILABLE SERVICES ==========")
+
+    for number, (service, price) in enumerate(
+        service_catalog.items(), start=1
+    ):
         formatted_price = f"{price:,}".replace(",", ".")
         print(f"{number}. {service}: Rp {formatted_price}")
 
 
+# 5. SELECT MULTIPLE SERVICES
+
 def select_service(service_catalog):
+
     display_services(service_catalog)
 
     service_list = list(service_catalog.items())
@@ -50,25 +96,28 @@ def select_service(service_catalog):
         "\nEnter service numbers: "
     ).strip()
 
+    if not selected_input:
+        print("Please select at least one service.")
+        return None
+
     try:
         selected_numbers = [
             int(number.strip())
             for number in selected_input.split(",")
         ]
-    except ValueError:
-        print("Please enter valid numbers.")
-        return None
 
-    if not selected_numbers:
-        print("Please select at least one service.")
+    except ValueError:
+        print("Invalid input. Please enter numbers only.")
         return None
 
     if len(set(selected_numbers)) != len(selected_numbers):
         print("Duplicate selections are not allowed.")
         return None
 
-    if any(number < 1 or number > len(service_list)
-           for number in selected_numbers):
+    if any(
+        number < 1 or number > len(service_list)
+        for number in selected_numbers
+    ):
         print("One or more service numbers are invalid.")
         return None
 
@@ -80,10 +129,11 @@ def select_service(service_catalog):
     return selected_services
 
 
+# 6. BOOK APPOINTMENT
 
-def book_appointment(service_catalog):
+def book_appointment(service_catalog, duration_catalog):
 
-    print("\n===== BOOK YOUR APPOINTMENT =====")
+    print("\n========== BOOK YOUR APPOINTMENT ==========")
 
     customer_name = input("Enter your name: ").strip()
 
@@ -104,31 +154,76 @@ def book_appointment(service_catalog):
         "Enter appointment time (HH:MM): "
     ).strip()
 
+    if not appointment_date or not appointment_time:
+        print("Date and time cannot be empty.")
+        return
+
+    # Calculate total price
+
     total_price = sum(
         price for service, price in selected_services
     )
 
-    print("\n===== BOOKING SUMMARY =====")
+    # Calculate total duration
+
+    total_duration = sum(
+        duration_catalog[service]
+        for service, price in selected_services
+    )
+
+    # Display booking summary
+
+    print("\n========== BOOKING SUMMARY ==========")
+
     print(f"Customer: {customer_name}")
 
     print("\nSelected Services:")
 
     for service, price in selected_services:
+
         formatted_price = f"{price:,}".replace(",", ".")
-        print(f"- {service}: Rp {formatted_price}")
+        duration = duration_catalog[service]
+
+        print(
+            f"- {service}: Rp {formatted_price} "
+            f"({duration} minutes)"
+        )
+
+    # Format total price
 
     formatted_total = f"{total_price:,}".replace(",", ".")
 
+    # Convert minutes into hours and minutes
+
+    hours = total_duration // 60
+    minutes = total_duration % 60
+
     print(f"\nTotal Price: Rp {formatted_total}")
+    print(
+        f"Estimated Duration: "
+        f"{hours} hours {minutes} minutes"
+    )
+
     print(f"Date: {appointment_date}")
     print(f"Time: {appointment_time}")
+
+    # Booking confirmation
 
     confirmation = input(
         "\nConfirm your booking? (yes/no): "
     ).strip().lower()
 
     if confirmation == "yes":
+
         print("\nYour booking request has been confirmed!")
+        print(f"Thank you for choosing {salon_name}.")
+
     else:
-        print("\nBooking cancelled.")
-book_appointment(services)
+
+        print("\nYour booking has been cancelled.")
+
+
+# 7. RUN THE PROGRAM
+
+if __name__ == "__main__":
+    book_appointment(services, service_durations)
