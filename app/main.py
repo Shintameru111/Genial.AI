@@ -1,508 +1,136 @@
+from datetime import datetime
+import database as db
+from calendar_integration import export_ics, sync_booking_to_google
+from reports import export_excel
 
-from datetime import datetime, timedelta
+def rupiah(value):
+    return "Rp " + f"{value:,}".replace(",", ".")
 
-
-# ==========================================
-# GENIAL.AI - SALON BOOKING SYSTEM
-# ==========================================
-
-
-# 1. SALON INFORMATION
-
-salon_name = "Glow Beauty Salon"
-
-
-# 2. SERVICE CATALOG (PRICE IN RUPIAH)
-
-services = {
-    "Haircut": 50000,
-    "Haircut & Styling": 100000,
-    "Hair Coloring": 150000,
-    "Hair Highlights": 200000,
-    "Hair Wash": 30000,
-    "Hair Treatment": 100000,
-    "Manicure and Pedicure": 175000,
-    "Facial Treatment": 200000,
-    "Makeup Application": 250000,
-    "Bridal Makeup": 500000,
-    "Eyebrow Threading": 40000,
-    "Eyelash Extensions": 300000,
-    "Waxing": 80000,
-    "Skincare Consultation": 150000,
-    "Massage Therapy": 200000,
-    "bridal package": 1500000,
-    "spa package": 1000000,
-    "hair spa": 250000,
-    "nail art": 100000,
-    "bridal hair styling": 300000,
-    "bridal makeup trial": 200000,
-    "bridal hair trial": 150000,
-    "bridal package with makeup and hair": 2000000
-}
-
-
-# 3. SERVICE DURATION (IN MINUTES)
-
-service_durations = {
-    "Haircut": 30,
-    "Haircut & Styling": 60,
-    "Hair Coloring": 120,
-    "Hair Highlights": 180,
-    "Hair Wash": 20,
-    "Hair Treatment": 60,
-    "Manicure and Pedicure": 90,
-    "Facial Treatment": 60,
-    "Makeup Application": 60,
-    "Bridal Makeup": 120,
-    "Eyebrow Threading": 15,
-    "Eyelash Extensions": 120,
-    "Waxing": 30,
-    "Skincare Consultation": 30,
-    "Massage Therapy": 60,
-    "bridal package": 240,
-    "spa package": 120,
-    "hair spa": 90,
-    "nail art": 60,
-    "bridal hair styling": 90,
-    "bridal makeup trial": 90,
-    "bridal hair trial": 90,
-    "bridal package with makeup and hair": 300
-}
-
-
-# 4. SALON OPERATING HOURS
-
-OPENING_HOUR = 9
-CLOSING_HOUR = 21
-
-MAX_DAILY_MINUTES = (
-    CLOSING_HOUR - OPENING_HOUR
-) * 60
-
-# Temporary booking storage
-# Data will disappear when the program is closed.
-
-bookings = []
-
-
-# 5. DISPLAY AVAILABLE SERVICES
-
-def display_services(service_catalog):
-
-    print(f"\nWelcome to {salon_name}")
+def choose_services():
+    rows=db.services()
     print("\n========== AVAILABLE SERVICES ==========")
-
-    for number, (service, price) in enumerate(
-        service_catalog.items(), start=1
-    ):
-
-        formatted_price = f"{price:,}".replace(",", ".")
-
-        print(
-            f"{number}. {service}: Rp {formatted_price}"
-        )
-
-
-# 6. SELECT MULTIPLE SERVICES
-
-def select_service(service_catalog):
-
-    display_services(service_catalog)
-
-    service_list = list(service_catalog.items())
-
-    print("\nYou can select multiple services.")
-    print("Example: 1, 2, 4")
-
-    selected_input = input(
-        "\nEnter service numbers: "
-    ).strip()
-
-    if not selected_input:
-
-        print("Please select at least one service.")
-        return None
-
+    for i,s in enumerate(rows,1):
+        print(f"{i}. {s['name']} | {rupiah(s['price'])} | {s['duration_minutes']} menit | kapasitas {s['capacity']}")
+    raw=input("\nPilih nomor layanan (pisahkan koma, contoh 1,3): ").strip()
     try:
-
-        selected_numbers = [
-            int(number.strip())
-            for number in selected_input.split(",")
-        ]
-
+        nums=[int(x.strip()) for x in raw.split(",")]
+        if not nums or len(nums)!=len(set(nums)) or any(n<1 or n>len(rows) for n in nums):
+            raise ValueError
+        return [dict(rows[n-1]) for n in nums]
     except ValueError:
-
-        print("Invalid input. Please enter numbers only.")
+        print("Pilihan tidak valid. Coba lagi.")
         return None
 
-    if len(set(selected_numbers)) != len(selected_numbers):
-
-        print("Duplicate selections are not allowed.")
-        return None
-
-    if any(
-        number < 1 or number > len(service_list)
-        for number in selected_numbers
-    ):
-
-        print("One or more service numbers are invalid.")
-        return None
-
-    selected_services = [
-        service_list[number - 1]
-        for number in selected_numbers
-    ]
-
-    return selected_services
-
-
-# 7. CHECK BOOKING AVAILABILITY
-
-
-def check_availability(new_start, duration_minutes):
-
-    new_end = new_start + timedelta(
-        minutes=duration_minutes
-    )
-
-    # Get salon opening and closing times
-
-    opening_time = new_start.replace(
-        hour=OPENING_HOUR,
-        minute=0,
-        second=0,
-        microsecond=0
-    )
-
-    closing_time = new_start.replace(
-        hour=CLOSING_HOUR,
-        minute=0,
-        second=0,
-        microsecond=0
-    )
-
-    # Check whether booking starts before opening
-
-    if new_start < opening_time:
-        return False, "Our salon opens at 09:00."
-
-    # Check whether booking ends after closing
-
-    if new_end > closing_time:
-        return False, "Our salon closes at 21:00."
-
-    # Check existing bookings
-
-    for booking in bookings:
-
-        existing_start = booking["start"]
-        existing_end = booking["end"]
-
-        if (
-            new_start < existing_end
-            and existing_start < new_end
-        ):
-            return False, "This time slot is already booked."
-
-    return True, "This time slot is available."
-
-
-# 8. FIND THE NEXT AVAILABLE SLOT
-
-def find_next_available_slot(
-    requested_start,
-    duration_minutes,
-    max_days=30
-):
-
-    candidate = requested_start
-
-    last_date = (
-        requested_start.date()
-        + timedelta(days=max_days)
-    )
-
-    while candidate.date() <= last_date:
-
-        opening_time = candidate.replace(
-            hour=OPENING_HOUR,
-            minute=0,
-            second=0,
-            microsecond=0
-        )
-
-        closing_time = candidate.replace(
-            hour=CLOSING_HOUR,
-            minute=0,
-            second=0,
-            microsecond=0
-        )
-
-        # Move to opening time if necessary
-
-        if candidate < opening_time:
-
-            candidate = opening_time
-
-        # Move to the next day if the service
-        # cannot finish before closing time
-
-        if (
-            candidate + timedelta(minutes=duration_minutes)
-            > closing_time
-        ):
-
-            candidate = (
-                candidate + timedelta(days=1)
-            ).replace(
-                hour=OPENING_HOUR,
-                minute=0,
-                second=0,
-                microsecond=0
-            )
-
-            continue
-
-        # Check whether the candidate slot is available
-
-        available, message = check_availability(
-            candidate,
-            duration_minutes
-        )
-
-        if available:
-
-            return candidate
-
-        # Try another slot after 15 minutes
-
-        candidate += timedelta(minutes=15)
-
-    return None
-
-
-# 9. BOOK APPOINTMENT
-
-def book_appointment(service_catalog, duration_catalog):
-
-    print("\n========== BOOK YOUR APPOINTMENT ==========")
-
-    customer_name = input(
-        "Enter your name: "
-    ).strip()
-
-    if not customer_name:
-
-        print("Customer name cannot be empty.")
-        return
-
-    selected_services = select_service(service_catalog)
-
-    if selected_services is None:
-
-        return
-
-    # Calculate total price
-
-    total_price = sum(
-        price for service, price in selected_services
-    )
-
-    # Calculate total duration
-
-    total_duration = sum(
-        duration_catalog[service]
-        for service, price in selected_services
-    )
-
-    # Check maximum daily duration
-
-    if total_duration > MAX_DAILY_MINUTES:
-
-        print("\n========== ADMIN ASSISTANCE ==========")
-
-        print(
-            "This booking requires special scheduling."
-        )
-
-        print(
-            "The total service duration exceeds "
-            "the salon's 12-hour operating window."
-        )
-
-        print(
-            "Please contact our salon administrator."
-        )
-
-        return
-
-    # Ask for appointment date and time
-
-    appointment_date = input(
-        "\nEnter appointment date (DD-MM-YYYY): "
-    ).strip()
-
-    appointment_time = input(
-        "Enter appointment time (HH:MM): "
-    ).strip()
-
-    # Validate date and time
-
-    try:
-
-        requested_start = datetime.strptime(
-            f"{appointment_date} {appointment_time}",
-            "%d-%m-%Y %H:%M"
-        )
-
-    except ValueError:
-
-        print("\nInvalid date or time format.")
-        print("Use DD-MM-YYYY and HH:MM.")
-
-        return
-
-    # Prevent past bookings
-
-    if requested_start <= datetime.now():
-
-        print("\nYou cannot book a time in the past.")
-        return
-
-    # Check requested availability
-
-    available, message = check_availability(
-        requested_start,
-        total_duration
-    )
-
-    final_start = requested_start
-
-    # Search for an alternative if unavailable
-
-    if not available:
-
-        print("\nRequested time is unavailable.")
-        print(message)
-
-        print("\nSearching for the next available slot...")
-
-        suggested_start = find_next_available_slot(
-            requested_start,
-            total_duration
-        )
-
-        if suggested_start is None:
-
-            print("\nNo available slot found within 30 days.")
-
-            print(
-                "Please contact our salon administrator."
-            )
-
-            return
-
-        print("\n========== ALTERNATIVE SLOT ==========")
-
-        print(
-            "Suggested Date:",
-            suggested_start.strftime("%d-%m-%Y")
-        )
-
-        print(
-            "Suggested Time:",
-            suggested_start.strftime("%H:%M")
-        )
-
-        choice = input(
-            "\nWould you like this suggested slot? (yes/no): "
-        ).strip().lower()
-
-        if choice != "yes":
-
-            print("\nBooking cancelled.")
-            return
-
-        final_start = suggested_start
-
-    # Calculate final end time
-
-    final_end = final_start + timedelta(
-        minutes=total_duration
-    )
-
-    # Display booking summary
-
+def make_booking():
+    op,cl=int(db.setting("opening_hour","9")),int(db.setting("closing_hour","21"))
+    print(f"\nJam operasional {db.setting('salon_name','Glow Beauty Salon')}: {op:02d}:00–{cl:02d}:00")
+    print(f"Kapasitas salon: {db.setting('salon_capacity','1')} booking bersamaan (batas keseluruhan).")
+    name=input("Nama pelanggan: ").strip()
+    if not name: print("Nama tidak boleh kosong."); return
+    phone=input("Nomor telepon (opsional): ").strip()
+    items=choose_services()
+    if not items: return
+    date=input("Tanggal (DD-MM-YYYY): ").strip()
+    time=input("Jam (HH:MM): ").strip()
+    try: start=datetime.strptime(date+" "+time,"%d-%m-%Y %H:%M")
+    except ValueError: print("Format tanggal/jam tidak valid."); return
+    if start <= datetime.now(): print("Tidak bisa booking pada waktu yang sudah lewat."); return
+    ok,msg=db.check_availability(start,items)
+    if not ok:
+        print("\nJADWAL TIDAK TERSEDIA:",msg)
+        suggestion=db.find_next_slot(start,items)
+        if not suggestion:
+            print("Tidak ada slot tersedia dalam 30 hari. Hubungi admin."); return
+        print(f"Alternatif terdekat: {suggestion:%d-%m-%Y %H:%M}")
+        if input("Gunakan jadwal alternatif? (yes/no): ").strip().lower()!="yes":
+            print("Booking dibatalkan."); return
+        start=suggestion
+    duration=sum(x["duration_minutes"] for x in items)
+    total=sum(x["price"] for x in items)
+    end=start.replace() + __import__("datetime").timedelta(minutes=duration)
     print("\n========== BOOKING SUMMARY ==========")
+    print("Customer:",name)
+    print("Services:",", ".join(x["name"] for x in items))
+    print("Start:",start.strftime("%d-%m-%Y %H:%M"))
+    print("End:",end.strftime("%d-%m-%Y %H:%M"))
+    print("Duration:",duration,"minutes")
+    print("Total:",rupiah(total))
+    if input("Konfirmasi booking? (yes/no): ").strip().lower()!="yes":
+        print("Booking dibatalkan."); return
+    try:
+        bid=db.create_booking(name,phone,start,[x["id"] for x in items])
+    except ValueError as exc:
+        print("Booking belum tersimpan:",exc); return
+    print(f"\nBooking #{bid} berhasil disimpan ke database.")
+    try:
+        event_id=sync_booking_to_google(bid)
+        if event_id: print("Google Calendar: event berhasil dibuat.")
+    except Exception as exc:
+        print("Google Calendar belum tersinkron:",exc)
+        print("Booking tetap aman tersimpan di database.")
+    print("Ekspor kalender tersedia melalui menu admin.")
 
-    print(f"Customer: {customer_name}")
+def admin_menu():
+    while True:
+        print("\n========== ADMIN MENU ==========")
+        print("1. Atur kapasitas salon")
+        print("2. Atur kapasitas per layanan")
+        print("3. Lihat seluruh booking")
+        print("4. Batalkan booking")
+        print("5. Export kalender (.ics)")
+        print("6. Export laporan Excel (.xlsx)")
+        print("7. Kembali")
+        choice=input("Pilih: ").strip()
+        try:
+            if choice=="1":
+                n=int(input("Kapasitas salon bersamaan (minimal 1): "))
+                if n<1: raise ValueError("Kapasitas minimal 1.")
+                db.set_setting("salon_capacity",n)
+                print("Kapasitas salon diperbarui.")
+            elif choice=="2":
+                rows=db.services()
+                for s in rows: print(f"{s['id']}. {s['name']} (kapasitas {s['capacity']})")
+                sid=int(input("ID layanan: "))
+                cap=int(input("Kapasitas baru: "))
+                db.update_service_capacity(sid,cap)
+                print("Kapasitas layanan diperbarui.")
+            elif choice=="3":
+                rows=db.list_bookings()
+                if not rows: print("Belum ada booking.")
+                for b in rows:
+                    print(f"#{b['id']} | {b['customer_name']} | {b['start_at']}–{b['end_at']} | {b['services']} | {b['status']} | {rupiah(b['total_price'])}")
+            elif choice=="4":
+                bid=int(input("ID booking yang dibatalkan: "))
+                db.cancel_booking(bid)
+                print("Booking dibatalkan.")
+            elif choice=="5":
+                path=export_ics()
+                print("File kalender dibuat:",path)
+            elif choice=="6":
+                path=export_excel()
+                print("Laporan Excel dibuat:",path)
+            elif choice=="7": return
+            else: print("Pilihan tidak dikenal.")
+        except (ValueError,RuntimeError) as exc:
+            print("Tidak dapat memproses:",exc)
 
-    print("\nSelected Services:")
+def main():
+    db.init_db()
+    while True:
+        print("\n================================")
+        print("       GENIAL.AI")
+        print("  Salon Booking Management")
+        print("================================")
+        print("1. Customer booking")
+        print("2. Admin")
+        print("3. Keluar")
+        choice=input("Pilih menu: ").strip()
+        if choice=="1": make_booking()
+        elif choice=="2": admin_menu()
+        elif choice=="3":
+            print("Terima kasih telah menggunakan Genial.AI!")
+            break
+        else: print("Pilihan tidak valid.")
 
-    for service, price in selected_services:
-
-        formatted_price = f"{price:,}".replace(",", ".")
-
-        duration = duration_catalog[service]
-
-        print(
-            f"- {service}: Rp {formatted_price} "
-            f"({duration} minutes)"
-        )
-
-    formatted_total = f"{total_price:,}".replace(",", ".")
-
-    hours = total_duration // 60
-    minutes = total_duration % 60
-
-    print(f"\nTotal Price: Rp {formatted_total}")
-
-    print(
-        f"Estimated Duration: "
-        f"{hours} hours {minutes} minutes"
-    )
-
-    print(
-        "Start:",
-        final_start.strftime("%d-%m-%Y %H:%M")
-    )
-
-    print(
-        "End:",
-        final_end.strftime("%d-%m-%Y %H:%M")
-    )
-
-    # Confirm booking
-
-    confirmation = input(
-        "\nConfirm your booking? (yes/no): "
-    ).strip().lower()
-
-    if confirmation == "yes":
-
-        # Save booking in temporary storage
-
-        bookings.append({
-            "customer": customer_name,
-            "services": selected_services,
-            "start": final_start,
-            "end": final_end,
-            "total_price": total_price
-        })
-
-        print("\nYour booking has been confirmed!")
-
-        print(
-            f"Thank you for choosing {salon_name}."
-        )
-
-    else:
-
-        print("\nBooking cancelled.")
-
-
-# 10. RUN THE PROGRAM
-
-if __name__ == "__main__":
-
-    book_appointment(services, service_durations)
+if __name__=="__main__":
+    main()

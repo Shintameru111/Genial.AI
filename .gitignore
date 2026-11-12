@@ -1,11 +1,32 @@
-# Python
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
 __pycache__/
 *.py[cod]
-venv/
-.venv/
+*.pyo
 
-# Environment variables
+# Local database
+data/genial.db
+*.sqlite
+*.sqlite3
+
+# Exported reports
+data/exports/*
+!data/exports/.gitkeep
+
+# Google Calendar credentials and tokens
+credentials.json
+token.json
+
+# Environment variables and secrets
 .env
+.env.*
 
-# VS Code
-.vscode/
+# Backup files
+main_old.py
+.gitignore_old
+README_OLD.md
