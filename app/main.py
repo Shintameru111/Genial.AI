@@ -38,4 +38,32 @@ def display_services(service_catalog):
         print(f"- {service}: Rp {formatted_price}")
 
 
-display_services(services)
+
+
+
+def select_service(service_catalog):
+    display_services(service_catalog)
+
+    selected_service = input(
+        "\nPlease enter the service you want: "
+    ).strip().lower()
+
+    matching_service = next(
+        (service for service in service_catalog
+         if service.lower() == selected_service),
+        None
+    )
+
+    if matching_service:
+        price = service_catalog[matching_service]
+        formatted_price = f"{price:,}".replace(",", ".")
+
+        print("\nYour selected service:")
+        print(f"Service: {matching_service}")
+        print(f"Price: Rp {formatted_price}")
+
+    else:
+        print("\nSorry, the service is not available.")
+
+
+select_service(services)
